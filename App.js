@@ -1,18 +1,43 @@
-import React, { useState } from 'react';
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, FlatList, Modal, Button } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet, FlatList, Modal, Button, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Calculator = () => {
   const [expression, setExpression] = useState('');
   const [result, setResult] = useState('');
   const [history, setHistory] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('calculationHistory')
+      .then((value) => {
+        if (value) {
+          setHistory(JSON.parse(value));
+        }
+      })
+      .catch((error) => console.error(error));
+  }, []);
+
+  useEffect(() => {
+    const handleOrientationChange = ({ window: { width, height } }) => {
+      setIsLandscape(width > height);
+    };
+
+    Dimensions.addEventListener('change', handleOrientationChange);
+    return () => {
+      Dimensions.removeEventListener('change', handleOrientationChange);
+    };
+  }, []);
 
   const calculateResult = () => {
     try {
       const calculatedResult = eval(expression);
       setResult(calculatedResult.toString());
       const calculation = `${expression} = ${calculatedResult}`;
-      setHistory(prevHistory => [...prevHistory, calculation]);
+      const newHistory = [...history, calculation];
+      setHistory(newHistory);
+      AsyncStorage.setItem('calculationHistory', JSON.stringify(newHistory));
     } catch (error) {
       setResult('Error');
     }
@@ -20,7 +45,30 @@ const Calculator = () => {
 
   const handleButtonPress = (value) => {
     setExpression(prevExpression => prevExpression + value);
-    setResult(''); // Reset the result when a new input is added
+    setResult('');
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    AsyncStorage.removeItem('calculationHistory');
+  };
+
+  const handleSpecialCalculation = (operation) => {
+    let specialResult = '';
+    switch (operation) {
+      case 'sqrt':
+        specialResult = Math.sqrt(parseFloat(expression));
+        break;
+      case 'pow2':
+        specialResult = Math.pow(parseFloat(expression), 2);
+        break;
+      case 'log10':
+        specialResult = Math.log10(parseFloat(expression));
+        break;
+      default:
+        break;
+    }
+    setResult(specialResult.toString());
   };
 
   const renderButton = (value) => (
@@ -31,10 +79,6 @@ const Calculator = () => {
       <Text style={styles.buttonText}>{value}</Text>
     </TouchableOpacity>
   );
-
-  const clearHistory = () => {
-    setHistory([]);
-  };
 
   return (
     <View style={styles.container}>
@@ -68,22 +112,38 @@ const Calculator = () => {
         <View style={styles.row}>
           {renderButton('0')}
           {renderButton('.')}
-          <TouchableOpacity style={styles.button} onPress={calculateResult}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={calculateResult}
+          >
             <Text style={styles.buttonText}>=</Text>
           </TouchableOpacity>
           {renderButton('+')}
         </View>
+        {isLandscape && (
+          <View style={styles.row}>
+            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('sqrt')}>
+              <Text style={styles.buttonText}>√</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('pow2')}>
+              <Text style={styles.buttonText}>x²</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('log10')}>
+              <Text style={styles.buttonText}>log</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.clearButton}
+          onPress={clearHistory}
+        >
+          <Text style={styles.clearButtonText}>C</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.historyButton}
           onPress={() => setShowHistoryModal(true)}
         >
           <Text style={styles.historyButtonText}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={() => { setExpression(''); setResult(''); }}
-        >
-          <Text style={styles.clearButtonText}>C</Text>
         </TouchableOpacity>
       </View>
       <Modal
