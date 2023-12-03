@@ -1,260 +1,105 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, FlatList, Modal, Button, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Button, FlatList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const Calculator = () => {
+export default function App() {
   const [expression, setExpression] = useState('');
   const [result, setResult] = useState('');
   const [history, setHistory] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem('calculationHistory')
-      .then((value) => {
-        if (value) {
-          setHistory(JSON.parse(value));
-        }
-      })
-      .catch((error) => console.error(error));
+    // Khi component được tạo, lấy lịch sử từ AsyncStorage
+    retrieveHistory();
   }, []);
 
-  useEffect(() => {
-    const handleOrientationChange = ({ window: { width, height } }) => {
-      setIsLandscape(width > height);
-    };
+  const retrieveHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem('calculatorHistory');
+      if (storedHistory) {
+        setHistory(JSON.parse(storedHistory));
+      }
+    } catch (error) {
+      console.error('Error retrieving history:', error);
+    }
+  };
 
-    Dimensions.addEventListener('change', handleOrientationChange);
-    return () => {
-      Dimensions.removeEventListener('change', handleOrientationChange);
-    };
-  }, []);
+  const storeHistory = async (newHistory) => {
+    try {
+      // Lưu lịch sử vào AsyncStorage
+      await AsyncStorage.setItem('calculatorHistory', JSON.stringify(newHistory));
+    } catch (error) {
+      console.error('Error storing history:', error);
+    }
+  };
 
-  const calculateResult = () => {
+  const handleCalculate = () => {
     try {
       const calculatedResult = eval(expression);
-      setResult(calculatedResult.toString());
-      const calculation = `${expression} = ${calculatedResult}`;
-      const newHistory = [...history, calculation];
+      setResult(`Result: ${calculatedResult}`);
+      const currentTime = new Date();
+      const newHistoryItem = {
+        expression,
+        result: calculatedResult,
+        time: currentTime.toLocaleTimeString(),
+      };
+      const newHistory = [newHistoryItem, ...history.slice(0, 9)];
       setHistory(newHistory);
-      AsyncStorage.setItem('calculationHistory', JSON.stringify(newHistory));
+      storeHistory(newHistory);
     } catch (error) {
       setResult('Error');
     }
   };
 
-  const handleButtonPress = (value) => {
-    setExpression(prevExpression => prevExpression + value);
-    setResult('');
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
-    AsyncStorage.removeItem('calculationHistory');
-  };
-
-  const handleSpecialCalculation = (operation) => {
-    let specialResult = '';
-    switch (operation) {
-      case 'sqrt':
-        specialResult = Math.sqrt(parseFloat(expression));
-        break;
-      case 'pow2':
-        specialResult = Math.pow(parseFloat(expression), 2);
-        break;
-      case 'log10':
-        specialResult = Math.log10(parseFloat(expression));
-        break;
-      default:
-        break;
-    }
-    setResult(specialResult.toString());
-  };
-
-  const renderButton = (value) => (
-    <TouchableOpacity
-      style={styles.button}
-      onPress={() => handleButtonPress(value)}
-    >
-      <Text style={styles.buttonText}>{value}</Text>
-    </TouchableOpacity>
+  const renderHistoryItem = ({ item }) => (
+    <Text style={styles.historyItem}>{`${item.expression} = ${item.result} (${item.time})`}</Text>
   );
 
   return (
     <View style={styles.container}>
       <TextInput
         style={styles.input}
-        placeholder="0"
+        placeholder="Enter expression"
         value={expression}
         onChangeText={(text) => setExpression(text)}
-        keyboardType="numeric"
       />
+      <Button title="Calculate" onPress={handleCalculate} />
       <Text style={styles.result}>{result}</Text>
-      <View style={styles.buttons}>
-        <View style={styles.row}>
-          {renderButton('7')}
-          {renderButton('8')}
-          {renderButton('9')}
-          {renderButton('/')}
-        </View>
-        <View style={styles.row}>
-          {renderButton('4')}
-          {renderButton('5')}
-          {renderButton('6')}
-          {renderButton('*')}
-        </View>
-        <View style={styles.row}>
-          {renderButton('1')}
-          {renderButton('2')}
-          {renderButton('3')}
-          {renderButton('-')}
-        </View>
-        <View style={styles.row}>
-          {renderButton('0')}
-          {renderButton('.')}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={calculateResult}
-          >
-            <Text style={styles.buttonText}>=</Text>
-          </TouchableOpacity>
-          {renderButton('+')}
-        </View>
-        {isLandscape && (
-          <View style={styles.row}>
-            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('sqrt')}>
-              <Text style={styles.buttonText}>√</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('pow2')}>
-              <Text style={styles.buttonText}>x²</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={() => handleSpecialCalculation('log10')}>
-              <Text style={styles.buttonText}>log</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={clearHistory}
-        >
-          <Text style={styles.clearButtonText}>C</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.historyButton}
-          onPress={() => setShowHistoryModal(true)}
-        >
-          <Text style={styles.historyButtonText}>History</Text>
-        </TouchableOpacity>
-      </View>
-      <Modal
-        visible={showHistoryModal}
-        animationType="slide"
-        onRequestClose={() => setShowHistoryModal(false)}
-      >
-        <View style={styles.historyModal}>
-          <Text style={styles.historyTitle}>History:</Text>
-          <FlatList
-            data={history}
-            renderItem={({ item }) => <Text style={styles.historyItem}>{item}</Text>}
-            keyExtractor={(item, index) => index.toString()}
-            style={styles.historyList}
-          />
-          <Button title="Clear History" onPress={clearHistory} />
-          <Button title="Close" onPress={() => setShowHistoryModal(false)} />
-        </View>
-      </Modal>
+      <Text style={styles.historyTitle}>Calculation History:</Text>
+      <FlatList
+        data={history}
+        renderItem={renderHistoryItem}
+        keyExtractor={(item, index) => index.toString()}
+      />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    padding: 16,
   },
   input: {
-    width: '80%',
-    height: 50,
+    height: 60,
+    borderColor: 'gray',
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    marginBottom: 10,
-    padding: 10,
-    fontSize: 24,
-    textAlign: 'right',
-  },
-  buttons: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 5,
-  },
-  button: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#DDDDDD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 5,
-  },
-  buttonText: {
-    fontSize: 24,
-  },
-  historyButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'lightblue',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 5,
-  },
-  historyButtonText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  clearButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'red',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 5,
-  },
-  clearButtonText: {
-    fontSize: 24,
-    color: '#fff',
+    marginBottom: 60,
+    padding: 8,
+    width: '100%',
   },
   result: {
-    fontSize: 36,
-  },
-  historyModal: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 20,
-  },
-  historyTitle: {
+    marginTop: 20,
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
   },
-  historyList: {
-    flexGrow: 1,
-    width: '100%',
+  historyTitle: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   historyItem: {
     fontSize: 16,
-    marginVertical: 5,
   },
 });
-
-export default Calculator;
